@@ -1,0 +1,12 @@
+﻿  client.cpp
+e:\lessons\computer networks\experiment\e2\gbnclient\gbnclient\client.cpp(90): warning C4305: “初始化”: 从“double”到“float”截断
+e:\lessons\computer networks\experiment\e2\gbnclient\gbnclient\client.cpp(91): warning C4305: “初始化”: 从“double”到“float”截断
+e:\lessons\computer networks\experiment\e2\gbnclient\gbnclient\client.cpp(119): warning C4309: “=”: 截断常量值
+e:\lessons\computer networks\experiment\e2\gbnclient\gbnclient\client.cpp(144): warning C4244: “=”: 从“unsigned short”转换到“char”，可能丢失数据
+e:\lessons\computer networks\experiment\e2\gbnclient\gbnclient\client.cpp(153): warning C4244: “=”: 从“unsigned short”转换到“char”，可能丢失数据
+e:\lessons\computer networks\experiment\e2\gbnclient\gbnclient\client.cpp(76): warning C4996: 'inet_addr': Use inet_pton() or InetPton() instead or define _WINSOCK_DEPRECATED_NO_WARNINGS to disable deprecated API warnings
+  c:\program files (x86)\windows kits\8.1\include\um\winsock2.h(1850): note: 参见“inet_addr”的声明
+e:\lessons\computer networks\experiment\e2\gbnclient\gbnclient\client.cpp(96): warning C4996: 'sscanf': This function or variable may be unsafe. Consider using sscanf_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.10240.0\ucrt\stdio.h(2254): note: 参见“sscanf”的声明
+  GBNClient.vcxproj -> E:\Lessons\Computer Networks\experiment\e2\GBNClient\Debug\GBNClient.exe
+  GBNClient.vcxproj -> E:\Lessons\Computer Networks\experiment\e2\GBNClient\Debug\GBNClient.pdb (Full PDB)

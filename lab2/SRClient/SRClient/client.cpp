@@ -1,0 +1,214 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <WinSock2.h>
+#include <time.h>
+
+#pragma comment(lib,"ws2_32.lib")
+
+#define SERVER_PORT 12340 //接收数据的端口号
+#define SERVER_IP "127.0.0.1" // 服务器的 IP 地址
+const int BUFFER_LENGTH = 1026;  //缓冲区大小，（以太网中UDP的数据帧中包长度应小于1480字节）
+const int RECEIVER_WIND_SIZE = 10;
+
+const int SEQ_SIZE = 20;//接收端序列号个数，为 1-20
+
+BOOL hasSeq[SEQ_SIZE+1]; //seq接收情况，false为本应收到但未收到
+int curSeq;
+
+
+/****************************************************************/
+/*  -time 从服务器端获取当前时间
+-quit 退出客户端
+-testsr [X] 测试 SR 协议实现可靠数据传输
+[X] [0,1] 模拟数据包丢失的概率
+[Y] [0,1] 模拟 ACK 丢失的概率
+*/
+/****************************************************************/
+void printTips() {
+	printf("*****************************************\n");
+	printf("|    -time to get current time |\n");
+	printf("|    -quit to exit client |\n");
+	printf("|    -testsr [X] [Y] to test the sr |\n");
+	printf("*****************************************\n");
+}
+
+
+//************************************
+// Method: lossInLossRatio
+// FullName: lossInLossRatio
+// Access: public
+// Returns: BOOL
+// Qualifier: 根据丢失率随机生成一个数字，判断是否丢失,丢失则返回TRUE，否则返回 FALSE
+// Parameter: float lossRatio [0,1]
+//************************************
+BOOL lossInLossRatio(float lossRatio) {
+	int lossBound = (int)(lossRatio * 100);
+	int r = rand() % 101;
+	if (r <= lossBound) {
+		return TRUE;
+	}
+	return FALSE;
+}
+
+
+int main(int argc, char* argv[])
+{
+	printf("******************客户端******************");
+	//加载套接字库（必须）
+	WORD wVersionRequested;
+	WSADATA wsaData;
+	//套接字加载时错误提示
+	int err;
+	//版本 2.2
+	wVersionRequested = MAKEWORD(2, 2);
+	//加载 dll 文件 Scoket 库
+	err = WSAStartup(wVersionRequested, &wsaData);
+	if (err != 0) {
+		//找不到 winsock.dll
+		printf("WSAStartup failed with error: %d\n", err);
+		return 1;
+	}
+	if (LOBYTE(wsaData.wVersion) != 2 || HIBYTE(wsaData.wVersion) != 2)
+	{
+		printf("Could not find a usable version of Winsock.dll\n");
+		WSACleanup();
+	}
+	else {
+		printf("The Winsock 2.2 dll was found okay\n");
+	}
+	SOCKET socketClient = socket(AF_INET, SOCK_DGRAM, 0);  //无连接、不可靠的数据报
+	SOCKADDR_IN addrServer;
+	addrServer.sin_addr.S_un.S_addr = inet_addr(SERVER_IP);
+	addrServer.sin_family = AF_INET;
+	addrServer.sin_port = htons(SERVER_PORT);
+	//接收缓冲区
+	char buffer[BUFFER_LENGTH];
+	ZeroMemory(buffer, sizeof(buffer));
+	char dataBuffer[1024 * 113];
+	ZeroMemory(dataBuffer, 1024 * 113);
+	int len = sizeof(SOCKADDR);
+	//为了测试与服务器的连接，可以使用 -time 命令从服务器端获得当前时间
+	//使用 -testsr [X] [Y] 测试 GBN 其中[X]表示数据包丢失概率
+	//					[Y]表示 ACK 丢包概率
+	printTips();
+	int ret;
+	int interval = 1;//收到数据包之后返回ACK的间隔，默认为 1 表示每个都返回ACK， 0 或者负数均表示所有的都不返回ACK
+	char cmd[128];
+	float packetLossRatio = 0.1; //默认包丢失率 0.1
+	float ackLossRatio = 0.1;   //默认ACK丢失率 0.1
+								//用时间作为随机种子，放在循环的最外面
+	srand((unsigned)time(NULL));
+	while (true) {
+		gets_s(buffer);
+		ret = sscanf(buffer, "%s%f%f", &cmd, &packetLossRatio, &ackLossRatio);
+		//开始 SR 测试，使用 SR 协议实现 UDP 可靠文件传输
+		if (!strcmp(cmd, "-testsr")) {
+			printf("%s\n", "Begin to test SR protocol, please don't abort the process");
+			printf("The loss ratio of packet is %.2f,the loss ratio of ack is %.2f\n", packetLossRatio, ackLossRatio);
+			int stage = 0;
+			BOOL b;
+			unsigned char u_code;  //状态码
+			unsigned short seq;  //包的序列号
+			unsigned short recvSeq;  //接收窗口大小为 10，已确认的序列号
+			unsigned short waitSeq;  //等待的序列号
+			hasSeq[0] = TRUE;   //序列号为1-20
+			sendto(socketClient, "-testsr", strlen("-testsr") + 1, 0, (SOCKADDR*)&addrServer, sizeof(SOCKADDR));
+			while (true)
+			{
+				//等待 server 回复设置 UDP 为阻塞模式
+				recvfrom(socketClient, buffer, BUFFER_LENGTH, 0, (SOCKADDR*)&addrServer, &len);
+				switch (stage) {
+				case 0:  //等待握手阶段
+					u_code = (unsigned char)buffer[0];
+					if ((unsigned char)buffer[0] == 205)
+					{
+						printf("Ready for file transmission\n");
+						buffer[0] = 200;
+						buffer[1] = '\0';
+						sendto(socketClient, buffer, 2, 0, (SOCKADDR*)&addrServer, sizeof(SOCKADDR));
+						stage = 1;
+						recvSeq = 0;
+						waitSeq = 1;
+					}
+					break;
+				case 1:  //等待接收数据阶段
+					seq = (unsigned short)buffer[0];
+					//随机法模拟包是否丢失
+					b = lossInLossRatio(packetLossRatio);
+					if (b) {
+						printf("The packet with a seq of %d loss\n", seq);
+						continue;
+					}
+					printf("recv a packet with a seq of %d, \trecvSeq:%d\n", seq, recvSeq);
+
+					//如果是期待的包，正确接收，正常确认即可
+					int step = seq - recvSeq;
+					step = step >= 0 ? step : step + SEQ_SIZE;
+					//序号在接收窗口内
+					if (step < RECEIVER_WIND_SIZE) {
+						hasSeq[seq] = TRUE;
+						BOOL flag = TRUE; //判断从recvSeq到seq是否都被接收
+						if (recvSeq <= seq) {
+							for (int i = recvSeq; i <= seq; i++) {
+								if (!hasSeq[i]) {
+									flag = FALSE;
+								}
+							}
+						}
+						else {
+							for (int i = recvSeq; i <= SEQ_SIZE; i++) {
+								if (!hasSeq[i]) {
+									flag = FALSE;
+								}
+							}
+							for (int i = 1; i <= seq; i++) {
+								if (!hasSeq[i]) {
+									flag = FALSE;
+								}
+							}
+						}
+						if (flag) {
+							recvSeq = seq;
+						}
+						//输出数据
+						printf("%s\n", &buffer[1]);
+						buffer[0] = seq;
+						buffer[1] = '\0';
+					}
+					else if (recvSeq > seq && (recvSeq - seq) <= RECEIVER_WIND_SIZE) {
+						buffer[0] = seq;
+						buffer[1] = '\0';
+					}
+					else {
+						//如果当前一个包都没有收到，则等待 Seq 为 1 的数据包，不是则不返回 ACK（因为并没有上一个正确的 ACK）
+						if (!recvSeq) {
+							continue;
+						}
+						buffer[0] = recvSeq;
+						buffer[1] = '\0';
+					}
+					b = lossInLossRatio(ackLossRatio);
+					if (b) {
+						printf("The ack of %d loss\n", (unsigned char)buffer[0]);
+						continue;
+					}
+					sendto(socketClient, buffer, 2, 0, (SOCKADDR*)&addrServer, sizeof(SOCKADDR));
+					printf("send a ack of %d\n", (unsigned char)buffer[0]);
+					break;
+				}
+				Sleep(500);
+			}
+		}
+		sendto(socketClient, buffer, strlen(buffer) + 1, 0, (SOCKADDR*)&addrServer, sizeof(SOCKADDR));
+		ret = recvfrom(socketClient, buffer, BUFFER_LENGTH, 0, (SOCKADDR*)&addrServer, &len);
+		printf("%s\n", buffer);
+		if (!strcmp(buffer, "Good bye!")) {
+			break;
+		}
+		printTips();
+	}
+	//关闭套接字
+	closesocket(socketClient);
+	WSACleanup();
+	return 0;
+}

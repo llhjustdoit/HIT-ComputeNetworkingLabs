@@ -1,0 +1,6 @@
+﻿  server.cpp
+e:\lessons\computer networks\experiment\e2\srserver\srserver\server.cpp(39): warning C4996: 'localtime': This function or variable may be unsafe. Consider using localtime_s instead. To disable deprecation, use _CRT_SECURE_NO_WARNINGS. See online help for details.
+  c:\program files (x86)\windows kits\10\include\10.0.10240.0\ucrt\time.h(505): note: 参见“localtime”的声明
+e:\lessons\computer networks\experiment\e2\srserver\srserver\server.cpp(221): warning C4309: “=”: 截断常量值
+  SRServer.vcxproj -> E:\Lessons\Computer Networks\experiment\e2\SRServer\Debug\SRServer.exe
+  SRServer.vcxproj -> E:\Lessons\Computer Networks\experiment\e2\SRServer\Debug\SRServer.pdb (Full PDB)
